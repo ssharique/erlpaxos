@@ -1,0 +1,11 @@
+{acceptor,
+        [{node1, acceptor1},
+         {node2, acceptor2},
+         {node3, acceptor3},
+         {node4, acceptor4}]}.
+{learner, 
+	[{node1, learner1},
+         {node2, learner2},
+         {node3, learner3},
+         {node4, learner4}]
+}.

@@ -1,0 +1,3 @@
+-record(paxosOpts,
+        {acceptors,
+		 learners}).

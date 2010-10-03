@@ -25,6 +25,8 @@ start() ->
 stop() ->
     void.
 
+propose_test() ->
+	proposer:propose("Test").
 
 %%
 %% Local Functions

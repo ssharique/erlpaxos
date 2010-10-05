@@ -9,6 +9,7 @@
 %% Include files
 %%
 -include("options.hrl").
+-include("config.hrl").
 
 %%
 %% Exported Functions
@@ -19,19 +20,19 @@
          terminate/2, code_change/3]).
          
 
--record(proposer_state,
-        {acceptors,
-		 proposer_id}).
+-record(proposer_state, {acceptors,
+		 				proposer_id,
+		 				phase1_records = []
+}).
 		 
 %%
 %% API Functions
 %%
 start_link(State) ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, State, []).
+    gen_server:start_link({global, ?MODULE}, ?MODULE, State, []).
     
 propose(Value) ->
-	gen_server:cast(?MODULE, {start_proposal, Value}).
-
+	gen_server:cast({global, ?MODULE}, {start_new_proposal, Value}).
 
 init(State) ->
 	io:format("State: ~p~n", [State]),
@@ -41,9 +42,8 @@ handle_call(_Request, _From, State) ->
 	{reply, {}, State}.
 
 handle_cast(Msg, State) ->
-%%	io:format("Msg: ~p~n", [Msg]),
-	receive_msg(Msg, State),
-	{noreply, State}.
+	io:format("Msg: ~p~n", [Msg]),
+	{noreply, receive_msg(Msg, State)}.
 
 handle_info(_Info, State) ->
 	{noreply, State}.
@@ -58,11 +58,42 @@ code_change(_OldVsn, State, _Extra) ->
 %% Local Functions
 %%
 
-receive_msg({start_proposal, Value}, State) ->
-	io:format("Value: ~p~n", [Value]),
+propose_with_id(Id, N, Value) ->
+	gen_server:cast({global, ?MODULE}, {start_proposal, Id, N, Value}).
 	
-	io:format("State: ~p~n", [State]),
-	gen_server:abcast(State#proposer_state.acceptors, aceceptor, Value).
+receive_msg({start_proposal, Id, N, Value}, State) ->
+	NewPhase1_records = create_promises_timeout(Id, N + 100, Value, State#proposer_state.phase1_records),
+	gen_server:abcast(State#proposer_state.acceptors, aceceptor, Value),
+	State#proposer_state{phase1_records = NewPhase1_records};
+	
+receive_msg({start_new_proposal, Value}, State) ->
+	Id = State#proposer_state.proposer_id,
+	propose_with_id(Id, ?START_N, Value),
+	State#proposer_state{proposer_id = Id + 1};
 	
 
+receive_msg({promise_timeout, Id, N, V}, State) ->
+	Phase1_records = State#proposer_state.phase1_records,
+	Waiting = is_waiting({Id, N, V}, Phase1_records),
+	if
+		Waiting == true -> 
+			io:format("PRO::TIMEOUT! Not enough promises for Id:~p, N:~p, V:~p - RETRY!~n", [Id, N, V]),
+			NewPhase1_records = remove_from_waiting(Id, N, Phase1_records),
+			propose_with_id(Id, N, V);
+		true -> 
+			io:format("PRO::Instance Id:~p is not waiting for promises anymore~n", [Id]),
+			NewPhase1_records = Phase1_records
+	end,
+	io:format("State: ~p~n", [State]),
+	State#proposer_state{phase1_records = NewPhase1_records}.
+
+remove_from_waiting(Id, N, Phase1_records) ->
+	lists:filter(fun({Id2, N2, V2, Tref}) -> not({Id2, N2, V2, Tref} == {Id, N, V2, Tref}) end, Phase1_records).
+	
+is_waiting({Id, N, V}, Phase1_records) ->
+	lists:any(fun({Id2, N2, V2, Tref}) -> {Id2, N2, V2, Tref} == {Id, N, V, Tref} end, Phase1_records).
+
+create_promises_timeout(Id, N, V, Phase1_records) ->
+	{ok, Tref} = timer:apply_after(?PROMISE_WAIT_TIMEOUT, gen_server, cast, [{global, ?MODULE}, {promise_timeout, Id, N, V}]), 
+	[{Id, N, V, Tref} | Phase1_records].
 	

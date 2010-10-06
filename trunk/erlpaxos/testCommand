@@ -1,0 +1,15 @@
+erlpaxosTest:start().
+erlpaxosTest:propose_test().
+
+{acceptor, 'noah1@noah-laptop'} ! {prepare, 1, 101, node()}
+
+gen_server:abcast(['noah1@noah-laptop'], acceptor, {prepare, 1, 101, node()}),
+
+gen_server:cast({acceptor, 'noah1@noah-laptop'}, {prepare, 1, 101, node()}),
+
+rpc:multicall(['noah1@noah-laptop'], erlpaxosTest, propose_test, []).
+
+rpc:multicall(['noah1@noah-laptop'], acceptor, prepare, [{prepare, 1, 101, node()}]).
+
+gen_server:abcast(State#proposer_state.acceptors, acceptor, {prepare, Id, N, node()}),
+

@@ -20,7 +20,10 @@
 start() ->
 	{ok,Term} = file:consult("options.opt"),
 	{ok, State} = parseOpts(Term),
-	proposer:start_link(State#paxosOpts.acceptors).
+	R1 = proposer:start_link(State#paxosOpts.acceptors),
+	R2 = acceptor:start_link(State#paxosOpts.proposers),
+	{R1, R2}.
+	
 	
 stop() ->
     void.
@@ -38,6 +41,9 @@ parseOpts(Term) ->
 
 parseOpts([], State) ->
 	{ok, State};
+
+parseOpts([{proposer, Nodes} | T], State) ->
+	parseOpts(T, State#paxosOpts{proposers = Nodes});
 	
 parseOpts([{acceptor, Nodes} | T], State) ->
 	parseOpts(T, State#paxosOpts{acceptors = Nodes});

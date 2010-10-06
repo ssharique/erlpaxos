@@ -1,3 +1,3 @@
--record(paxosOpts,
-        {acceptors,
-		 learners}).
+-record(paxosOpts, {proposers,
+					acceptors,
+					learners}).

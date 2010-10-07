@@ -45,7 +45,7 @@ handle_call(_Request, _From, State) ->
 
 handle_cast(Msg, State) ->
 	io:format("Proposer Received Msg: ~p~n", [Msg]),
-	io:format("Proposer State: ~p~n", [State]),
+%%	io:format("Proposer State: ~p~n", [State]),
 	{noreply, receive_msg(Msg, State)}.
 
 handle_info(_Info, State) ->
@@ -65,7 +65,7 @@ propose_with_id(Id, N, Value) ->
 	gen_server:cast(?MODULE, {start_proposal, Id, N, Value}).
 	
 receive_msg({start_proposal, Id, N, Value}, State) ->
-	NewPhase1_records = create_promises_timeout(Id, N + 100, Value, State#proposer_state.phase1_records),
+	NewPhase1_records = create_promises_timeout(Id, N, Value, State#proposer_state.phase1_records),
 	gen_server:abcast(State#proposer_state.acceptors, acceptor, {prepare, Id, N, node()}),
 	State#proposer_state{phase1_records = NewPhase1_records};
 	
@@ -82,13 +82,17 @@ receive_msg({promise_timeout, Id, N, V}, State) ->
 		Waiting == true -> 
 			io:format("PRO::TIMEOUT! Not enough promises for Id:~p, N:~p, V:~p - RETRY!~n", [Id, N, V]),
 			NewPhase1_records = remove_from_waiting(Id, N, Phase1_records),
-			propose_with_id(Id, N, V);
+			propose_with_id(Id, N + ?STEP_N, V);
 		true -> 
 			io:format("PRO::Instance Id:~p is not waiting for promises anymore~n", [Id]),
 			NewPhase1_records = Phase1_records
 	end,
-	State#proposer_state{phase1_records = NewPhase1_records}.
+	State#proposer_state{phase1_records = NewPhase1_records};
 
+receive_msg({promise, Id, N, V, Node}, State) ->
+	%% TODO
+	State.
+	
 remove_from_waiting(Id, N, Phase1_records) ->
 	lists:filter(fun({Id2, N2, V2, Tref}) -> not({Id2, N2, V2, Tref} == {Id, N, V2, Tref}) end, Phase1_records).
 	

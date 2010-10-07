@@ -31,3 +31,5 @@
 -define(MAX_NUM_OF_PROPOSERS, 100).
 
 -define(START_N, 87).
+
+-define(STEP_N, 100).

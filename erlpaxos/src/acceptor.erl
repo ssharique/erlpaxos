@@ -41,7 +41,7 @@ handle_call(_Request, _From, State) ->
 
 handle_cast(Msg, State) ->
 	io:format("Acceptor Received Msg: ~p~n", [Msg]),
-	io:format("Acceptor State: ~p~n", [State]),
+%%	io:format("Acceptor State: ~p~n", [State]),
 	{noreply, receive_msg(Msg, State)}.
 
 handle_info(_Info, State) ->

@@ -33,7 +33,6 @@ prepare(Msg) ->
 	gen_server:cast(?MODULE, Msg).
 
 init(State) ->
-	io:format("Acceptor Init State: ~p~n", [State]),
     {ok, #acceptor_state{proposers = State}}.
 
 handle_call(_Request, _From, State) ->

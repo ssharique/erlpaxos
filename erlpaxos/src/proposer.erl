@@ -21,8 +21,10 @@
          
 
 -record(proposer_state, {acceptors,
+						majority,
 		 				proposer_id,
-		 				phase1_records = []
+		 				instance_records = [],
+		 				promise_records = []
 }).
 
 -behaviour(gen_server).
@@ -37,8 +39,8 @@ propose(Value) ->
 	gen_server:cast(?MODULE, {start_new_proposal, Value}).
 
 init(State) ->
-	io:format("Proposer Init State: ~p~n", [State]),
-    {ok, #proposer_state{acceptors = State, proposer_id = 0}}.
+	Length = erlang:length(State),
+    {ok, #proposer_state{acceptors = State, proposer_id = 0, majority = (Length div 2) + 1}}.
 
 handle_call(_Request, _From, State) ->
 	{reply, {}, State}.
@@ -61,45 +63,63 @@ code_change(_OldVsn, State, _Extra) ->
 %% Local Functions
 %%
 
-propose_with_id(Id, N, Value) ->
-	gen_server:cast(?MODULE, {start_proposal, Id, N, Value}).
+propose_with_id(Id, N, ClientValue) ->
+	gen_server:cast(?MODULE, {start_proposal, Id, N, ClientValue}).
 	
-receive_msg({start_proposal, Id, N, Value}, State) ->
-	NewPhase1_records = create_promises_timeout(Id, N, Value, State#proposer_state.phase1_records),
+receive_msg({start_proposal, Id, N, ClientValue}, State) ->
+	NewInstance_records = create_promises_timeout(Id, N, ClientValue, State#proposer_state.instance_records),
 	gen_server:abcast(State#proposer_state.acceptors, acceptor, {prepare, Id, N, node()}),
-	State#proposer_state{phase1_records = NewPhase1_records};
+	State#proposer_state{instance_records = NewInstance_records};
 	
-receive_msg({start_new_proposal, Value}, State) ->
+receive_msg({start_new_proposal, ClientValue}, State) ->
 	Id = State#proposer_state.proposer_id,
-	propose_with_id(Id, ?START_N, Value),
+	propose_with_id(Id, ?START_N, ClientValue),
 	State#proposer_state{proposer_id = Id + 1};
 	
 
 receive_msg({promise_timeout, Id, N, V}, State) ->
-	Phase1_records = State#proposer_state.phase1_records,
-	Waiting = is_waiting({Id, N, V}, Phase1_records),
+	Instance_records = State#proposer_state.instance_records,
+	PromiseRecords = State#proposer_state.promise_records,
+	Waiting = proplists:is_defined(Id, Instance_records),
 	if
 		Waiting == true -> 
 			io:format("PRO::TIMEOUT! Not enough promises for Id:~p, N:~p, V:~p - RETRY!~n", [Id, N, V]),
-			NewPhase1_records = remove_from_waiting(Id, N, Phase1_records),
+			NewInstance_records = proplists:delete(Id, Instance_records),
+			NewPromiseRecords = proplists:delete(Id, PromiseRecords),
 			propose_with_id(Id, N + ?STEP_N, V);
 		true -> 
 			io:format("PRO::Instance Id:~p is not waiting for promises anymore~n", [Id]),
-			NewPhase1_records = Phase1_records
+			NewPromiseRecords = PromiseRecords,
+			NewInstance_records = Instance_records
 	end,
-	State#proposer_state{phase1_records = NewPhase1_records};
+	State#proposer_state{instance_records = NewInstance_records, promise_records = NewPromiseRecords};
 
-receive_msg({promise, Id, N, V, Node}, State) ->
-	%% TODO
-	State.
+receive_msg({promise, Id, PromiseN, AcceptedValue, Node}, State) ->
+	Instance_records = State#proposer_state.instance_records,
+	PromiseRecords = State#proposer_state.promise_records,
+	Majority = State#proposer_state.majority,
+	case proplists:get_value(Id, Instance_records) of
+		undefined ->
+			NewPromiseRecords = PromiseRecords,
+			NewInstance_records = Instance_records;
+		{_N, _ClientValue, Tref} ->
+			NewPromiseRecords = [{Id, {PromiseN, AcceptedValue, Node}} | PromiseRecords],
+			Count = erlang:length(proplists:get_all_values(Id, NewPromiseRecords)),
+			if
+				(Count >= Majority) ->
+					io:format("PRO::Got a majority of promises for id:~p N:~p~n", [Id, PromiseN]),
+					NewInstance_records = proplists:delete(Id, Instance_records),
+					timer:cancel(Tref);
+					%% TODO
+				true ->
+					io:format("PRO::Not enough promises so far for id:~p~n", [Id]),
+					NewInstance_records = Instance_records
+			end
+	end,
+	State#proposer_state{instance_records = NewInstance_records, promise_records = NewPromiseRecords}.
 	
-remove_from_waiting(Id, N, Phase1_records) ->
-	lists:filter(fun({Id2, N2, V2, Tref}) -> not({Id2, N2, V2, Tref} == {Id, N, V2, Tref}) end, Phase1_records).
-	
-is_waiting({Id, N, V}, Phase1_records) ->
-	lists:any(fun({Id2, N2, V2, Tref}) -> {Id2, N2, V2, Tref} == {Id, N, V, Tref} end, Phase1_records).
 
-create_promises_timeout(Id, N, V, Phase1_records) ->
-	{ok, Tref} = timer:apply_after(?PROMISE_WAIT_TIMEOUT, gen_server, cast, [?MODULE, {promise_timeout, Id, N, V}]), 
-	[{Id, N, V, Tref} | Phase1_records].
+create_promises_timeout(Id, N, ClientValue, Instance_records) ->
+	{ok, Tref} = timer:apply_after(?PROMISE_WAIT_TIMEOUT, gen_server, cast, [?MODULE, {promise_timeout, Id, N, ClientValue}]), 
+	[{Id, {N, ClientValue, Tref}} | Instance_records].
 	

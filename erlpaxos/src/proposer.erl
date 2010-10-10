@@ -22,7 +22,7 @@
 
 -record(proposer_state, {acceptors,
 						majority,
-		 				proposer_id,
+		 				instance_id = 0,
 		 				instance_records = [],
 		 				promise_records = []
 }).
@@ -40,7 +40,7 @@ propose(Value) ->
 
 init(State) ->
 	Length = erlang:length(State),
-    {ok, #proposer_state{acceptors = State, proposer_id = 0, majority = (Length div 2) + 1}}.
+    {ok, #proposer_state{acceptors = State, majority = (Length div 2) + 1}}.
 
 handle_call(_Request, _From, State) ->
 	{reply, {}, State}.
@@ -72,9 +72,9 @@ receive_msg({start_proposal, Id, N, ClientValue}, State) ->
 	State#proposer_state{instance_records = NewInstance_records};
 	
 receive_msg({start_new_proposal, ClientValue}, State) ->
-	Id = State#proposer_state.proposer_id,
+	Id = State#proposer_state.instance_id,
 	propose_with_id(Id, ?START_N, ClientValue),
-	State#proposer_state{proposer_id = Id + 1};
+	State#proposer_state{instance_id = Id + 1};
 	
 
 receive_msg({promise_timeout, Id, N, V}, State) ->
@@ -108,17 +108,28 @@ receive_msg({promise, Id, PromiseN, AcceptedValue, Node}, State) ->
 			if
 				(Count >= Majority) ->
 					io:format("PRO::Got a majority of promises for id:~p N:~p~n", [Id, PromiseN]),
-					NewInstance_records = proplists:delete(Id, Instance_records),
-					timer:cancel(Tref);
+					NewInstance_records = remove_instance(Id, Instance_records, Tref);
 					%% TODO
 				true ->
 					io:format("PRO::Not enough promises so far for id:~p~n", [Id]),
 					NewInstance_records = Instance_records
 			end
 	end,
-	State#proposer_state{instance_records = NewInstance_records, promise_records = NewPromiseRecords}.
+	State#proposer_state{instance_records = NewInstance_records, promise_records = NewPromiseRecords};
 	
-
+receive_msg({old_instance, Id, _ProposedN, _Node}, State) ->
+	Instance_records = State#proposer_state.instance_records,
+	{Id, {_N, ClientValue, Tref}} = proplists:get_value(Id, Instance_records),
+	NewInstance_records = remove_instance(Id, Instance_records, Tref),
+	timer:cancel(Tref),
+	propose(ClientValue),
+	State#proposer_state{instance_records = NewInstance_records}.
+	
+remove_instance(Id, Instance_records, Tref) ->
+	NewInstance_records = proplists:delete(Id, Instance_records),
+	timer:cancel(Tref),
+	NewInstance_records.
+					
 create_promises_timeout(Id, N, ClientValue, Instance_records) ->
 	{ok, Tref} = timer:apply_after(?PROMISE_WAIT_TIMEOUT, gen_server, cast, [?MODULE, {promise_timeout, Id, N, ClientValue}]), 
 	[{Id, {N, ClientValue, Tref}} | Instance_records].

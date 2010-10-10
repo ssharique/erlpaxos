@@ -61,9 +61,12 @@ receive_msg({prepare, Id, ProposedN, Node}, State) ->
 	Accepted_records = State#acceptor_state.accepted_records,
 	case get_instance(Id, Accepted_records) of 
 		new_instance ->
-			NewAccepted_records = [{Id, {ProposedN, no_value}} | Accepted_records],
+			NewAccepted_records = [{Id, {ProposedN, no_value, false}} | Accepted_records],
 			io:format("ACC::Promising for id:~p, to n:~p, no previous value accepted~n", [Id, ProposedN]),
 			Response = {promise, Id, ProposedN, no_value, node()};
+		old_instance ->
+			NewAccepted_records = Accepted_records,
+			Response = {old_instance, Id, ProposedN, node()};
 		{BiggestPromised, AcceptedValue} ->
 			if
 				(ProposedN > BiggestPromised) ->
@@ -91,8 +94,14 @@ update_records_after_promise(Id, ProposedN, Accepted_records) ->
 
 get_instance(_, []) ->
 	new_instance;
-get_instance(Id, [{Id, Data} | _]) ->
-	Data;
+get_instance(Id, [{Id, {BiggestPromised, AcceptedValue, Accepted}} | _]) ->
+	if 
+		(Accepted == true) ->
+			old_instance;
+		true ->
+			{BiggestPromised, AcceptedValue}
+	end;
+	
 get_instance(Id, [_ | RestRecord]) ->
 	get_instance(Id, RestRecord).
 	

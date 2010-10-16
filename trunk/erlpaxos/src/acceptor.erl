@@ -80,8 +80,31 @@ receive_msg({prepare, Id, ProposedN, Node}, State) ->
 			end
 	end,
 	gen_server:abcast([Node], proposer, Response),
+	State#acceptor_state{accepted_records = NewAccepted_records};
+
+receive_msg({accept, Id, N, Value, _Node}, State) ->
+	Accepted_records = State#acceptor_state.accepted_records,
+	case get_instance(Id, Accepted_records) of 
+		{BiggestPromised, _AcceptedValue} ->
+			if
+				(N >= BiggestPromised) ->
+					io:format("ACC::Accepting value:~p for id:~p N:~p is bigger than last promised~n", [Value, Id, N]),
+					NewAccepted_records = update_accept_after_accept(Id, [], {N, Value}, Accepted_records);
+					%% TODO send to proposer and learner
+				true ->
+					NewAccepted_records = Accepted_records
+			end;
+		_ ->
+			NewAccepted_records = Accepted_records
+	end,
 	State#acceptor_state{accepted_records = NewAccepted_records}.
 
+update_accept_after_accept(Id, NewList, {FinalN, Value}, [{Id, _OldValue} | RestAcceptedRecord]) ->
+	Merged = lists:append(NewList, RestAcceptedRecord),
+	[{Id, {FinalN, Value, true}} | Merged];
+update_accept_after_accept(Id, NewList, FinalVal, [E | RestAcceptedRecord]) ->
+	update_accept_after_accept(Id, [E | NewList], FinalVal, RestAcceptedRecord).
+	
 update_records_after_promise(Id, ProposedN, Accepted_records) ->
 	lists:map(fun({Id2, {ProposedN2, V}}) -> 
 			if 

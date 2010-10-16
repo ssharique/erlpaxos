@@ -102,16 +102,36 @@ receive_msg({promise, Id, PromiseN, AcceptedValue, Node}, State) ->
 		undefined ->
 			NewPromiseRecords = PromiseRecords,
 			NewInstance_records = Instance_records;
-		{_N, _ClientValue, Tref} ->
-			NewPromiseRecords = [{Id, {PromiseN, AcceptedValue, Node}} | PromiseRecords],
-			Count = erlang:length(proplists:get_all_values(Id, NewPromiseRecords)),
+		{_N, ClientValue, Tref} ->
+			NewPromiseRecords2 = [{Id, {PromiseN, AcceptedValue, Node}} | PromiseRecords],
+			Prom = proplists:get_all_values(Id, NewPromiseRecords2),
+			Count = erlang:length(Prom),
 			if
 				(Count >= Majority) ->
 					io:format("PRO::Got a majority of promises for id:~p N:~p~n", [Id, PromiseN]),
-					NewInstance_records = remove_instance(Id, Instance_records, Tref);
-					%% TODO
+					
+					NewInstance_records = remove_instance(Id, Instance_records, Tref),
+					
+					NewPromiseRecords = proplists:delete(Id, NewPromiseRecords2),
+					{MaxPromN, Set} = get_values_set({0, []}, Prom),
+					case pick_up_value(MaxPromN, Set) of
+						{value_not_chosen, PromN, no_value} ->
+							io:format("PRO::We promises with no previous value, sending accept v:~p for id:~p~n", [ClientValue, Id]),
+							Response = {accept, Id, PromN, ClientValue, node()},
+							gen_server:abcast(State#proposer_state.acceptors, acceptor, Response);
+						{value_chosen, PromN, Value} ->
+							io:format("PRO::My value:~p has been choosen in instance:~p N:~p~n", [Value, Id, PromN]),
+							Response = {accept, Id, PromN, Value, node()},
+							gen_server:abcast(State#proposer_state.acceptors, acceptor, Response);
+						{value_not_chosen, PromN, Set} ->
+							io:format("PRO::Somebody else value is best candidate, sending accept v:~p for id:~p~n", [Set, Id]),
+							io:format("PRO::... still need to propose ~p - START OVER!~n", [ClientValue]),
+							propose_with_id(Id, PromN + ?STEP_N, ClientValue)
+					end;
+					
 				true ->
 					io:format("PRO::Not enough promises so far for id:~p~n", [Id]),
+					NewPromiseRecords = NewPromiseRecords2,
 					NewInstance_records = Instance_records
 			end
 	end,
@@ -124,6 +144,42 @@ receive_msg({old_instance, Id, _ProposedN, _Node}, State) ->
 	timer:cancel(Tref),
 	propose(ClientValue),
 	State#proposer_state{instance_records = NewInstance_records}.
+
+pick_up_value(PromN, Set) ->
+	Count = erlang:length(Set),
+	if 
+		(Count == 1) ->
+			Value = lists:nth(1, Set),
+			if
+				(Value == no_value) ->
+					{value_not_chosen, PromN, no_value};
+				true ->
+					{value_chosen, PromN, Value}
+			end;
+		true ->
+			{value_not_chosen, PromN, Set}
+	end.
+	
+get_values_set(ValueSet, []) ->
+	ValueSet;
+get_values_set({MaxPromN, Set}, [{PromiseN, AcceptedValue, _Node} | RestProm]) ->
+	if 
+		(PromiseN > MaxPromN) ->
+			get_values_set({PromiseN, [AcceptedValue]}, RestProm);
+		(PromiseN == MaxPromN) ->
+			IsDup = lists:member(AcceptedValue, Set),
+			if 
+				IsDup == false -> 
+					get_values_set({PromiseN, [AcceptedValue | Set]}, RestProm);
+				true ->
+					get_values_set({PromiseN, [AcceptedValue]}, RestProm)
+			end;
+		true ->
+			get_values_set({MaxPromN, Set}, RestProm)
+	end;
+	
+get_values_set(ValueSet, [_ | RestProm]) ->
+	get_values_set(ValueSet, RestProm).
 	
 remove_instance(Id, Instance_records, Tref) ->
 	NewInstance_records = proplists:delete(Id, Instance_records),

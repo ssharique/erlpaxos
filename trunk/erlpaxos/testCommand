@@ -13,3 +13,11 @@ rpc:multicall(['noah1@noah-laptop'], acceptor, prepare, [{prepare, 1, 101, node(
 
 gen_server:abcast(State#proposer_state.acceptors, acceptor, {prepare, Id, N, node()}),
 
+
+{proposer, ['noah1@noah-laptop']}.
+{acceptor, ['noah1@noah-laptop']}.
+{learner, ['noah1@noah-laptop']}.
+
+{proposer, ['noah1@noah-laptop', 'noah2@noah-laptop', 'noah3@noah-laptop']}.
+{acceptor, ['noah1@noah-laptop', 'noah2@noah-laptop', 'noah3@noah-laptop']}.
+{learner, ['noah1@noah-laptop', 'noah2@noah-laptop', 'noah3@noah-laptop']}.

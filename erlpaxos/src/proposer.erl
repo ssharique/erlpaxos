@@ -143,7 +143,19 @@ receive_msg({old_instance, Id, _ProposedN, _Node}, State) ->
 	NewInstance_records = remove_instance(Id, Instance_records, Tref),
 	timer:cancel(Tref),
 	propose(ClientValue),
-	State#proposer_state{instance_records = NewInstance_records}.
+	State#proposer_state{instance_records = NewInstance_records};
+
+receive_msg({accepted, Id, _N, _Value, _Node}, State) ->
+	OldId = State#proposer_state.instance_id,
+	if
+		(Id >= OldId) ->
+			NewId = Id + 1;
+		true ->
+			NewId = OldId
+	end,
+	io:format("PRO::new id:~p", [NewId]),
+	State#proposer_state{instance_id = NewId}.
+	
 
 pick_up_value(PromN, Set) ->
 	Count = erlang:length(Set),

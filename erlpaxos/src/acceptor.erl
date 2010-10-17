@@ -89,8 +89,9 @@ receive_msg({accept, Id, N, Value, _Node}, State) ->
 			if
 				(N >= BiggestPromised) ->
 					io:format("ACC::Accepting value:~p for id:~p N:~p is bigger than last promised~n", [Value, Id, N]),
-					NewAccepted_records = update_accept_after_accept(Id, [], {N, Value}, Accepted_records);
+					NewAccepted_records = update_accept_after_accept(Id, [], {N, Value}, Accepted_records),
 					%% TODO send to proposer and learner
+					gen_server:abcast(State#acceptor_state.proposers, proposer, {accepted, Id, N, Value, node()});
 				true ->
 					NewAccepted_records = Accepted_records
 			end;

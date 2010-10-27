@@ -22,14 +22,15 @@ start() ->
 	{ok, State} = parseOpts(Term),
 	R1 = proposer:start_link(State#paxosOpts.acceptors),
 	R2 = acceptor:start_link(State#paxosOpts.proposers),
-	{R1, R2}.
+	R3 = client:start_link(State#paxosOpts.proposers),
+	{R1, R2, R3}.
 	
 	
 stop() ->
     void.
 
 propose_test() ->
-	proposer:propose("Test").
+	client:propose("Test").
 
 %%
 %% Local Functions

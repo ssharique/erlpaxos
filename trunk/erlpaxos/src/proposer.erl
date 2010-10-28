@@ -153,7 +153,7 @@ receive_msg({accepted, Id, _N, _Value, _Node}, State) ->
 		true ->
 			NewId = OldId
 	end,
-	io:format("PRO::new id:~p", [NewId]),
+	io:format("PRO::new id:~p~n", [NewId]),
 	State#proposer_state{instance_id = NewId}.
 	
 

@@ -17,6 +17,7 @@
          
 
 -record(acceptor_state, {proposers,
+						learners,
 		 				accepted_records = []
 }).
 
@@ -32,8 +33,8 @@ start_link(State) ->
 prepare(Msg) ->
 	gen_server:cast(?MODULE, Msg).
 
-init(State) ->
-    {ok, #acceptor_state{proposers = State}}.
+init({Proposers, Learners}) ->
+    {ok, #acceptor_state{proposers = Proposers, learners = Learners}}.
 
 handle_call(_Request, _From, State) ->
 	{reply, {}, State}.
@@ -91,7 +92,8 @@ receive_msg({accept, Id, N, Value, _Node}, State) ->
 					io:format("ACC::Accepting value:~p for id:~p N:~p is bigger than last promised~n", [Value, Id, N]),
 					NewAccepted_records = update_accept_after_accept(Id, [], {N, Value}, Accepted_records),
 					%% TODO send to proposer and learner
-					gen_server:abcast(State#acceptor_state.proposers, proposer, {accepted, Id, N, Value, node()});
+					gen_server:abcast(State#acceptor_state.proposers, proposer, {accepted, Id, N, Value, node()}),
+					gen_server:abcast(State#acceptor_state.learners, learner, {learn, Id, Value, node()});
 				true ->
 					NewAccepted_records = Accepted_records
 			end;

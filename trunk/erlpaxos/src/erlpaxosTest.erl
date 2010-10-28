@@ -21,9 +21,10 @@ start() ->
 	{ok,Term} = file:consult("options.opt"),
 	{ok, State} = parseOpts(Term),
 	R1 = proposer:start_link(State#paxosOpts.acceptors),
-	R2 = acceptor:start_link(State#paxosOpts.proposers),
+	R2 = acceptor:start_link({State#paxosOpts.proposers, State#paxosOpts.learners}),
 	R3 = client:start_link(State#paxosOpts.proposers),
-	{R1, R2, R3}.
+	R4 = learner:start_link(State#paxosOpts.proposers),
+	{R1, R2, R3, R4}.
 	
 	
 stop() ->

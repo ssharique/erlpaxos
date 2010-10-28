@@ -34,19 +34,17 @@ init(State) ->
     {ok, #client_state{proposers = State}}.
 
 handle_call(Request, _From, State) ->
-	io:format("Learner Call Received Request: ~p~n", [Request]),
+	io:format("Client::Call Received Request: ~p~n", [Request]),
 	
 	Proposers = State#client_state.proposers,
 	Count = erlang:length(Proposers),
-	io:format("Count: ~p~n", [Count]),
 	Rand = random:uniform(Count),
-	io:format("Rand: ~p~n", [Rand]),
 	Prop = lists:nth(Rand, Proposers),
 	Result = gen_server:abcast([Prop], proposer, {start_new_proposal, {Request, node()}}),
 	{reply, Result, State}.
 
 handle_cast(Msg, State) ->
-	io:format("Learner Cast Received Msg: ~p~n", [Msg]),
+	io:format("Client::Cast Received Msg: ~p~n", [Msg]),
 	{noreply, receive_msg(Msg, State)}.
 
 handle_info(_Info, State) ->
@@ -62,5 +60,5 @@ code_change(_OldVsn, State, _Extra) ->
 %%
 %% Local Functions
 %%
-receive_msg({learner, Id, Node}, State) ->
+receive_msg({learn, Id, Node}, State) ->
 	State.

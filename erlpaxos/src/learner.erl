@@ -30,7 +30,7 @@ handle_call(_Request, _From, State) ->
 	{reply, {}, State}.
 
 handle_cast(Msg, State) ->
-	io:format("Learner Received Msg: ~p~n", [Msg]),
+	io:format("Learner::Cast Received Msg: ~p~n", [Msg]),
 	{noreply, receive_msg(Msg, State)}.
 
 handle_info(_Info, State) ->
@@ -46,6 +46,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%
 %% Local Functions
 %%
-receive_msg({learn, Id, Val}, State) ->
-	io:format("Learner Received Val: ~p~n", [Val]),
+receive_msg({learn, Id, {Value, ClientNode}, Node}, State) ->
+	gen_server:abcast([ClientNode], client, {learn, Id, node()}),
 	State.

@@ -1,3 +1,4 @@
 {proposer, ['noah1@noah-laptop']}.
 {acceptor, ['noah1@noah-laptop']}.
 {learner, ['noah1@noah-laptop']}.
+{client, {1, 1, 1}}.

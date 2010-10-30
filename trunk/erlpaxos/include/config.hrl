@@ -33,3 +33,5 @@
 -define(START_N, 87).
 
 -define(STEP_N, 100).
+
+-define(REQUEST_WAIT_TIMEOUT, 2000).

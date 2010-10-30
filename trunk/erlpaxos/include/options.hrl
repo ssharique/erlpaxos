@@ -1,3 +1,6 @@
 -record(paxosOpts, {proposers,
 					acceptors,
-					learners}).
+					learners,
+					n,
+					r,
+					w}).

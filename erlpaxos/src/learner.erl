@@ -46,6 +46,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%
 %% Local Functions
 %%
-receive_msg({learn, Id, {Value, ClientNode}, Node}, State) ->
-	gen_server:abcast([ClientNode], client, {learn, Id, node()}),
+receive_msg({learn, Id, {RequestId, Value, ClientNode}, Node}, State) ->
+	gen_server:abcast([ClientNode], client, {learn, RequestId, node()}),
 	State.
